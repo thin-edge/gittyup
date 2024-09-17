@@ -12,7 +12,7 @@ from git.exc import GitCommandError
 import paho.mqtt.client as mqtt
 
 CLONE_DIR = "repo"
-CHECK_INTERVAL = 60
+CHECK_INTERVAL = 15
 
 
 class GittyUpClient:
@@ -43,6 +43,13 @@ class GittyUpClient:
         client.on_subscribe = self.on_subscribe
 
         print(f"Trying to connect to the MQTT broker: host=localhost:1883")
+
+        client.will_set(
+            "te/device/main/service/gittyup/status/health",
+            json.dumps({"status": "down"}),
+            qos=1,
+            retain=True,
+        )
 
         client.connect("localhost", 1883)
         client.loop_start()
@@ -76,6 +83,12 @@ class GittyUpClient:
             )
         else:
             print(f"Connected to MQTT broker! result_code={reason_code}")
+            client.publish(
+                "te/device/main/service/gittyup/status/health",
+                json.dumps({"status": "up"}),
+                retain=True,
+                qos=1,
+            )
             self.subscribe()
 
     def on_disconnect(self, client, userdata, reason_code):
@@ -167,12 +180,17 @@ if __name__ == "__main__":
 
         # regularly poll remote repository until there are new commits to pull
         while True:
-            if clone_or_pull_repo(repo_url, CLONE_DIR):
+            commit = clone_or_pull_repo(repo_url, CLONE_DIR)
+            if commit:
                 profile = Path(CLONE_DIR) / "profile.json"
                 if profile.exists():
                     payload = json.loads(profile.read_text(encoding="utf-8"))
-                    # TODO: Publish local tedge command
-                    _ = payload
+                    payload["commit"] = commit
+                    cmd_id = f"gittyup-{int(time.time())}"
+                    client.publish_tedge_command(
+                        f"te/device/main///cmd/device_profile/{cmd_id}",
+                        json.dumps(payload),
+                    )
 
             # Wait for the specified interval before checking again
             print(f"Waiting for {CHECK_INTERVAL} seconds before the next pull check...")
