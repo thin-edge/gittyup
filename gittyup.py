@@ -5,7 +5,9 @@ import os
 import time
 import logging
 import tomllib
+import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 import git
@@ -15,6 +17,14 @@ import paho.mqtt.client as mqtt
 CLONE_DIR = "repo"
 CHECK_INTERVAL = 15
 
+
+@dataclass
+class GitOpsRepository:
+    url: str
+    branch: str
+
+def get_device_type():
+    return subprocess.check_output(["tedge", "config", "get", "device.type"]).decode("utf-8").strip()
 
 class GittyUpClient:
     """GittyUp client
@@ -159,19 +169,22 @@ class GittyUpClient:
                 )
 
 
-def read_repo_url_from_toml(config_file: str) -> str:
+def read_repo_url_from_toml(config_file: str) -> GitOpsRepository:
     """Reads the repository URL from a TOML configuration file."""
     # TODO: properly serialise the config
     file = open(config_file, "rb")
     config_data = tomllib.load(file)
     url = config_data.get("repository", {}).get("url")
+    # Use explicit branch or use the device type as the branch
+    branch = config_data.get("repository", {}).get("branch", "") or get_device_type()
+
     if url:
-        return url
+        return GitOpsRepository(url, branch)
     else:
         raise ValueError("Repository URL not found in the TOML file.")
 
 
-def clone_or_pull_repo(repo_url, clone_dir="repo") -> Optional[str]:
+def clone_or_pull_repo(repo: GitOpsRepository, clone_dir="repo") -> Optional[str]:
     """
     Pulls the new information from the remote repository to the local repository, if there is any.
     If local repository does not exist, it is cloned.
@@ -208,10 +221,10 @@ def clone_or_pull_repo(repo_url, clone_dir="repo") -> Optional[str]:
         return None
     else:
         # If the repository doesn't exist, clone it
-        logger.debug(f"Cloning the repository '{repo_url}' into '{clone_dir}'...")
+        logger.debug(f"Cloning the repository '{repo.url}' into '{clone_dir}'...")
 
         try:
-            repo = git.Repo.clone_from(repo_url, clone_dir)
+            repo = git.Repo.clone_from(repo.url, clone_dir)
         except GitCommandError as e:
             logger.error(f"Error during git clone: {e}")
 
@@ -226,17 +239,12 @@ if __name__ == "__main__":
     handler = logging.StreamHandler()
     handler.setLevel(logging.INFO)
     if os.getenv("INVOCATION_ID"):
-        formatter = logging.Formatter(
-            "%(levelname)s - %(message)s"
-        )
+        formatter = logging.Formatter("%(levelname)s - %(message)s")
     else:
-        formatter = logging.Formatter(
-            "%(asctime)s - %(levelname)s - %(message)s"
-        )
+        formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
     handler.setFormatter(formatter)
     logger.addHandler(handler)
 
-    repo_url = read_repo_url_from_toml("config.toml")
     client = GittyUpClient()
     try:
         client.connect()
@@ -245,7 +253,9 @@ if __name__ == "__main__":
 
         # regularly poll remote repository until there are new commits to pull
         while True:
-            commit = clone_or_pull_repo(repo_url, CLONE_DIR)
+            # Note: re-read the toml on each loop in case the file has change
+            repo = read_repo_url_from_toml("config.toml")
+            commit = clone_or_pull_repo(repo, CLONE_DIR)
             if commit:
                 profile = Path(CLONE_DIR) / "profile.json"
                 if profile.exists():

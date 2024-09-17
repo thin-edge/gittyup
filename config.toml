@@ -1,3 +1,4 @@
 [repository]
 url = "https://github.com/thin-edge/gittyup-linux-mainstream.git"
-branch = "main"
+# Optional branch, otherwise the tedge device.type will be used as the branch name
+# branch = "main"
