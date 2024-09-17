@@ -215,13 +215,13 @@ def read_repo_url_from_toml(config_file: str) -> GitOpsRepository:
     # Use explicit branch or use the device type as the branch
     branch = config_data.get("repository", {}).get("branch", "") or get_device_type()
 
-    if url:
+    if url and branch:
         return GitOpsRepository(url, branch)
     else:
-        raise ValueError("Repository URL not found in the TOML file.")
+        raise ValueError("Repository URL or branch not found in the TOML file.")
 
 
-def clone_or_pull_repo(repo: GitOpsRepository, clone_dir="repo") -> Optional[str]:
+def clone_or_pull_repo(repo_config: GitOpsRepository, clone_dir="repo") -> Optional[str]:
     """
     Pulls the new information from the remote repository to the local repository, if there is any.
     If local repository does not exist, it is cloned.
@@ -258,12 +258,19 @@ def clone_or_pull_repo(repo: GitOpsRepository, clone_dir="repo") -> Optional[str
         return None
     else:
         # If the repository doesn't exist, clone it
-        logger.debug(f"Cloning the repository '{repo.url}' into '{clone_dir}'...")
+        logger.debug(f"Cloning the repository '{repo_config.url}' into '{clone_dir}'...")
+        logger.debug("Using branch '%s'", repo_config.branch)
 
         try:
-            repo = git.Repo.clone_from(repo.url, clone_dir)
+            repo = git.Repo.clone_from(repo_config.url, clone_dir)
         except GitCommandError as e:
             logger.error(f"Error during git clone: {e}")
+
+        g = repo.git
+        g.checkout(repo_config.branch)
+
+        repo = git.Repo(clone_dir)
+        assert repo.active_branch.name == repo_config.branch, f"${repo.active_branch} != ${repo_config.branch}"
 
         logger.info(f"Repository cloned into '{clone_dir}'.")
 
