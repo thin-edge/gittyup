@@ -1,4 +1,4 @@
-name: tedge-container-plugin
+name: gittyup
 arch: all
 platform: linux
 version: ${SEMVER}
