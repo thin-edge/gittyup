@@ -157,9 +157,9 @@ class GittyUpClient:
         status = payload_dict.get("status", "")
 
         if status == "successful":
-            commit = (payload_dict.get("commit", ""),)
-            branch = (payload_dict.get("branch", ""),)
-            url = (payload_dict.get("url", ""),)
+            commit = payload_dict.get("commit", "")
+            branch = payload_dict.get("branch", "")
+            url = payload_dict.get("url", "")
             self.publish_tedge_command(message.topic, "")
 
             event_payload = {
