@@ -305,7 +305,7 @@ if __name__ == "__main__":
                 profile = Path(CLONE_DIR) / "profile.json"
                 if profile.exists():
                     payload = json.loads(profile.read_text(encoding="utf-8"))
-                    payload["commit"] = repo.commit[0] if isinstance(repo.commit, (tuple, list)) else repo.commit
+                    payload["commit"] = commit[0] if isinstance(commit, (tuple, list)) else commit
                     payload["branch"] = repo.branch[0] if isinstance(repo.branch, (tuple, list)) else repo.branch
                     payload["url"] = repo.url[0] if isinstance(repo.url, (tuple, list)) else repo.url
 
