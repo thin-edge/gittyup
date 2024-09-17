@@ -1,3 +1,3 @@
 # Build package
 build:
-    ./scripts/build.sh
+    ./ci/build.sh
