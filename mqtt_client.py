@@ -1,8 +1,6 @@
+import json
 import sys
-import threading
-from time import sleep
 import paho.mqtt.client as mqtt
-from subprocess import run
 
 class GittyUpClient():
     """ GittyUp client 
@@ -25,22 +23,10 @@ class GittyUpClient():
         client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2, client_id=self.device_id, clean_session=False)
         client.reconnect_delay_set(10, 120)
 
-        def on_connect(client, userdata, flags, reason_code, properties):
-            if reason_code.is_failure:
-                print(f"Failed to connect: {reason_code}. Retrying the connection")
-            else:
-                print(f"Connected to MQTT broker!")
-
-        def on_disconnect(client, userdata, mid, reason_code_list, properties):
-            print(f"Client was disconnected!")
-
-        def on_subscribe(client, userdata, mid, reason_code_list, properties):
-            if reason_code_list[0].is_failure:
-                print(f"Could not subscribe to given topic: {reason_code_list[0]}")
-
-        client.on_connect = on_connect
-        client.on_disconnect = on_disconnect
-        client.on_subscribe = on_subscribe
+        client.on_connect = self.on_connect
+        client.on_disconnect = self.on_disconnect
+        client.on_message = self.on_message
+        client.on_subscribe = self.on_subscribe
 
         print(f"Trying to connect to the MQTT broker: host=localhost:1883")
             
@@ -50,12 +36,7 @@ class GittyUpClient():
         self.client = client
 
     def shutdown(self):
-        """Shutdown client including any workers in progress
-
-        Args:
-            worker_timeout(float): Timeout in seconds to wait for
-                each worker (individually). Defaults to 10.
-        """
+        """Shutdown client including any workers in progress"""
         if self.client and self.client.is_connected():
             self.client.disconnect()
             self.client.loop_stop()
@@ -66,14 +47,39 @@ class GittyUpClient():
         print(f"subscribed to topic {self.sub_topic}")
 
     def loop_forever(self):
+         """Block infinitely"""
          self.client.loop_forever()
+
+    def publish_tedge_command(self, topic, payload):
+        """ Create tedge command"""
+
+        self.client.publish(topic=topic, payload=payload, retain=True, qos=1)
+
+    def on_connect(self, client, userdata, flags, reason_code, properties):
+            if reason_code.is_failure:
+                print(f"Failed to connect. result_code={reason_code}. Retrying the connection")
+            else:
+                print(f"Connected to MQTT broker! result_code={reason_code}")
+                self.subscribe()
+
+    def on_disconnect(self, client, userdata, mid, reason_code, properties):
+        print(f"Client was disconnected: result_code={reason_code}")
+
+    def on_message(self, client, userdata, message):
+        payload_dict = json.loads(message.payload)
+
+        if payload_dict['status'] == "successful":
+            self.publish_tedge_command(message.topic, '')
+            
+    def on_subscribe(self, client, userdata, mid, reason_code_list, properties):
+        if reason_code_list[0].is_failure:
+            print(f"Could not subscribe to {self.sub_topic}. result_code={reason_code_list[0]}")
 
 if __name__ == '__main__':
     client = GittyUpClient()
 
     try:
         client.connect()
-        client.subscribe()
         client.loop_forever()
     except ConnectionRefusedError:
             print("MQTT broker is not ready yet")
