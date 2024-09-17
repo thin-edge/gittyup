@@ -133,8 +133,8 @@ def clone_or_pull_repo(repo_url, clone_dir="repo") -> Optional[str]:
     - check_interval: Time in seconds between pull checks.
 
     Returns:
-    - Optional[str]: If local HEAD got updated, return SHA of the commit HEAD got updated to, None
-    otherwise.
+    - Optional[str]: If local HEAD got updated or repo was cloned, return SHA of the commit HEAD now
+    points to, None otherwise.
     """
     if os.path.exists(clone_dir):
         # If the repository exists, try to pull the latest changes
@@ -161,13 +161,13 @@ def clone_or_pull_repo(repo_url, clone_dir="repo") -> Optional[str]:
         print(f"Cloning the repository '{repo_url}' into '{clone_dir}'...")
 
         try:
-            git.Repo.clone_from(repo_url, clone_dir)
+            repo = git.Repo.clone_from(repo_url, clone_dir)
         except GitCommandError as e:
             print(f"Error during git clone: {e}")
 
         print(f"Repository cloned into '{clone_dir}'.")
 
-        return None
+        return repo.head.commit.hexsha
 
 
 if __name__ == "__main__":
