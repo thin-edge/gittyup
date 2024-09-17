@@ -1,0 +1,45 @@
+name: tedge-container-plugin
+arch: all
+platform: linux
+version: ${SEMVER}
+section: misc
+priority: optional
+maintainer: thin-edge.io <help@thin-edge.io>
+description: thin-edge.io gitops agent
+vendor: thin-edge.io
+homepage: https://github.com/thin-edge/gittyup
+license: Apache 2.0
+scripts:
+  preremove: ./packaging/pre-remove
+  postinstall: ./packaging/post-install
+  postremove: ./packaging/post-remove
+
+depends:
+  - python3-git
+
+apk:
+  # Use noarch instead of "all"
+  arch: noarch
+
+contents:
+  - src: ./gittyup.py
+    dst: /usr/bin/gittyup.py
+    file_info:
+      mode: 0755
+      owner: tedge
+      group: tedge
+
+  - src: ./config.toml
+    dst: /etc/gittyup/config.toml
+    type: config|noreplace
+    file_info:
+      mode: 0644
+      owner: tedge
+      group: tedge
+
+  - src: ./packaging/services/gittyup.service
+    dst: /usr/lib/systemd/system/gittyup.service
+    file_info:
+      mode: 0755
+      owner: tedge
+      group: tedge

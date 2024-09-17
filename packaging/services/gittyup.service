@@ -1,0 +1,14 @@
+[Unit]
+Description=gitty up is a gitops style device management client
+After=syslog.target network.target mosquitto.service
+
+[Service]
+User=tedge
+WorkingDirectory=/etc/gittyup
+ExecStart=/usr/bin/gittyup.py
+Restart=on-failure
+RestartPreventExitStatus=255
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
