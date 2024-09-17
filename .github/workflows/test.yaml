@@ -1,0 +1,21 @@
+name: Test
+on:
+  workflow_dispatch:
+  # Use a manual approval process before PR's are given access to
+  # the secrets which are required to run the integration tests.
+  # The PR code should be manually approved to see if it can be trusted.
+  # When in doubt, do not approve the test run.
+  # Reference: https://dev.to/petrsvihlik/using-environment-protection-rules-to-secure-secrets-when-building-external-forks-with-pullrequesttarget-hci
+  pull_request: 
+    branches: [ main ]
+  merge_group:
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - run: |
+          echo Running awesome test suite
