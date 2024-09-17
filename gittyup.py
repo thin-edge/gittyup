@@ -6,6 +6,7 @@ import time
 import tomllib
 import sys
 from pathlib import Path
+from typing import Optional
 import git
 from git.exc import GitCommandError
 import paho.mqtt.client as mqtt
@@ -13,23 +14,25 @@ import paho.mqtt.client as mqtt
 CLONE_DIR = "repo"
 CHECK_INTERVAL = 60
 
-class GittyUpClient():
-    """ GittyUp client 
-    
+
+class GittyUpClient:
+    """GittyUp client
+
     The GittyUp client is used to communicate with thin-edge via MQTT
     """
+
     def __init__(self):
         self.client = None
-        self.device_id = 'main'
-        self.root = 'te/device/main//'
-        self.sub_topic = f'{self.root}/cmd/device_profile/+'
-        
+        self.device_id = "main"
+        self.root = "te/device/main//"
+        self.sub_topic = f"{self.root}/cmd/device_profile/+"
+
     def connect(self):
         """Connect to the thin-edge.io MQTT broker"""
         if self.client is not None:
             print(f"MQTT client already exists. connected={self.client.is_connected()}")
             return
-        
+
         # Don't use a clean session so no messages will go missing
         client = mqtt.Client(client_id=self.device_id, clean_session=False)
         client.reconnect_delay_set(10, 120)
@@ -40,7 +43,7 @@ class GittyUpClient():
         client.on_subscribe = self.on_subscribe
 
         print(f"Trying to connect to the MQTT broker: host=localhost:1883")
-            
+
         client.connect("localhost", 1883)
         client.loop_start()
 
@@ -58,20 +61,22 @@ class GittyUpClient():
         print(f"subscribed to topic {self.sub_topic}")
 
     def loop_forever(self):
-         """Block infinitely"""
-         self.client.loop_forever()
+        """Block infinitely"""
+        self.client.loop_forever()
 
     def publish_tedge_command(self, topic, payload):
-        """ Create tedge command"""
+        """Create tedge command"""
 
         self.client.publish(topic=topic, payload=payload, retain=True, qos=1)
 
     def on_connect(self, client, userdata, flags, reason_code):
-            if reason_code != 0:
-                print(f"Failed to connect. result_code={reason_code}. Retrying the connection")
-            else:
-                print(f"Connected to MQTT broker! result_code={reason_code}")
-                self.subscribe()
+        if reason_code != 0:
+            print(
+                f"Failed to connect. result_code={reason_code}. Retrying the connection"
+            )
+        else:
+            print(f"Connected to MQTT broker! result_code={reason_code}")
+            self.subscribe()
 
     def on_disconnect(self, client, userdata, reason_code):
         print(f"Client was disconnected: result_code={reason_code}")
@@ -79,14 +84,16 @@ class GittyUpClient():
     def on_message(self, client, userdata, message):
         payload_dict = json.loads(message.payload)
 
-        if payload_dict['status'] == "successful":
-            self.publish_tedge_command(message.topic, '')
-            
+        if payload_dict["status"] == "successful":
+            self.publish_tedge_command(message.topic, "")
+
     def on_subscribe(self, client, userdata, mid, granted_qos):
         for sub_result in granted_qos:
             if sub_result == 0x80:
                 # error processing
-                print(f"Could not subscribe to {self.sub_topic}. result_code={granted_qos}")
+                print(
+                    f"Could not subscribe to {self.sub_topic}. result_code={granted_qos}"
+                )
 
 
 def read_repo_url_from_toml(config_file: str) -> str:
@@ -101,7 +108,7 @@ def read_repo_url_from_toml(config_file: str) -> str:
         raise ValueError("Repository URL not found in the TOML file.")
 
 
-def clone_or_pull_repo(repo_url, clone_dir="repo") -> bool:
+def clone_or_pull_repo(repo_url, clone_dir="repo") -> Optional[str]:
     """
     Pulls the new information from the remote repository to the local repository, if there is any.
     If local repository does not exist, it is cloned.
@@ -113,7 +120,8 @@ def clone_or_pull_repo(repo_url, clone_dir="repo") -> bool:
     - check_interval: Time in seconds between pull checks.
 
     Returns:
-    - bool: True if local HEAD got updated, False otherwise
+    - Optional[str]: If local HEAD got updated, return SHA of the commit HEAD got updated to, None
+    otherwise.
     """
     if os.path.exists(clone_dir):
         # If the repository exists, try to pull the latest changes
@@ -131,10 +139,10 @@ def clone_or_pull_repo(repo_url, clone_dir="repo") -> bool:
 
         if fetch_info.commit.hexsha != prev_commit.hexsha:
             print("Repository updated with new changes.")
-            return True
+            return fetch_info.commit.hexsha
 
         print("No new changes found. Repository is already up to date.")
-        return False
+        return None
     else:
         # If the repository doesn't exist, clone it
         print(f"Cloning the repository '{repo_url}' into '{clone_dir}'...")
@@ -146,7 +154,7 @@ def clone_or_pull_repo(repo_url, clone_dir="repo") -> bool:
 
         print(f"Repository cloned into '{clone_dir}'.")
 
-        return True
+        return None
 
 
 if __name__ == "__main__":
@@ -170,11 +178,11 @@ if __name__ == "__main__":
             print(f"Waiting for {CHECK_INTERVAL} seconds before the next pull check...")
             time.sleep(CHECK_INTERVAL)
     except ConnectionRefusedError:
-            print("MQTT broker is not ready yet")
+        print("MQTT broker is not ready yet")
     except KeyboardInterrupt:
-            print("Exiting...")
-            if client:
-                client.shutdown()
-            sys.exit(0)
+        print("Exiting...")
+        if client:
+            client.shutdown()
+        sys.exit(0)
     except Exception as ex:
-            print("Unexpected error. %s", ex)
+        print("Unexpected error. %s", ex)
