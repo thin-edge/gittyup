@@ -23,8 +23,14 @@ class GitOpsRepository:
     url: str
     branch: str
 
+
 def get_device_type():
-    return subprocess.check_output(["tedge", "config", "get", "device.type"]).decode("utf-8").strip()
+    return (
+        subprocess.check_output(["tedge", "config", "get", "device.type"])
+        .decode("utf-8")
+        .strip()
+    )
+
 
 class GittyUpClient:
     """GittyUp client
@@ -125,6 +131,8 @@ class GittyUpClient:
 
         if status == "successful":
             commit = (payload_dict.get("commit", ""),)
+            branch = (payload_dict.get("branch", ""),)
+            url = (payload_dict.get("url", ""),)
             self.publish_tedge_command(message.topic, "")
 
             event_payload = {
@@ -137,6 +145,8 @@ class GittyUpClient:
                 json.dumps(
                     {
                         "commit": commit,
+                        "branch": branch,
+                        "url": url,
                     }
                 ),
                 retain=True,
@@ -261,6 +271,9 @@ if __name__ == "__main__":
                 if profile.exists():
                     payload = json.loads(profile.read_text(encoding="utf-8"))
                     payload["commit"] = commit
+                    payload["branch"] = repo.branch
+                    payload["url"] = repo.url
+
                     cmd_id = f"gittyup-{int(time.time())}"
                     client.publish_tedge_command(
                         f"te/device/main///cmd/device_profile/{cmd_id}",
