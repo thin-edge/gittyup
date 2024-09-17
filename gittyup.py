@@ -15,6 +15,7 @@ import paho.mqtt.client as mqtt
 CLONE_DIR = "repo"
 CHECK_INTERVAL = 15
 
+
 class GittyUpClient:
     """GittyUp client
 
@@ -30,7 +31,9 @@ class GittyUpClient:
     def connect(self):
         """Connect to the thin-edge.io MQTT broker"""
         if self.client is not None:
-            logger.info(f"MQTT client already exists. connected={self.client.is_connected()}")
+            logger.info(
+                f"MQTT client already exists. connected={self.client.is_connected()}"
+            )
             return
 
         # Don't use a clean session so no messages will go missing
@@ -59,6 +62,13 @@ class GittyUpClient:
     def shutdown(self):
         """Shutdown client including any workers in progress"""
         if self.client and self.client.is_connected():
+            self.client.publish(
+                "te/device/main/service/gittyup/status/health",
+                json.dumps({"status": "down"}),
+                qos=1,
+                retain=True,
+            )
+            time.sleep(1)
             self.client.disconnect()
             self.client.loop_stop()
 
@@ -95,10 +105,50 @@ class GittyUpClient:
         logger.info(f"Client was disconnected: result_code={reason_code}")
 
     def on_message(self, client, userdata, message):
-        payload_dict = json.loads(message.payload)
+        if not message.payload:
+            return
 
-        if payload_dict["status"] == "successful":
+        payload_dict = json.loads(message.payload)
+        event_payload = None
+
+        status = payload_dict.get("status", "")
+
+        if status == "successful":
+            commit = (payload_dict.get("commit", ""),)
             self.publish_tedge_command(message.topic, "")
+
+            event_payload = {
+                "text": f"Congratulations city slicker, you're now on {commit} 🤠",
+                "status": status,
+            }
+
+            client.publish(
+                "te/device/main///twin/gittyup",
+                json.dumps(
+                    {
+                        "commit": commit,
+                    }
+                ),
+                retain=True,
+                qos=1,
+            )
+        elif status == "failed":
+            event_payload = {
+                "text": f"You've gone and broke the damn thing 🤠",
+                "status": status,
+            }
+        else:
+            event_payload = {
+                "text": f"Howdy partner, you're currently at {status} 🤠",
+                "status": status,
+            }
+
+        if event_payload:
+            client.publish(
+                "te/device/main///e/gittyup",
+                json.dumps(event_payload),
+                qos=1,
+            )
 
     def on_subscribe(self, client, userdata, mid, granted_qos):
         for sub_result in granted_qos:
@@ -172,6 +222,19 @@ def clone_or_pull_repo(repo_url, clone_dir="repo") -> Optional[str]:
 
 if __name__ == "__main__":
     logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.INFO)
+    if os.getenv("INVOCATION_ID"):
+        formatter = logging.Formatter(
+            "%(levelname)s - %(message)s"
+        )
+    else:
+        formatter = logging.Formatter(
+            "%(asctime)s - %(levelname)s - %(message)s"
+        )
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
 
     repo_url = read_repo_url_from_toml("config.toml")
     client = GittyUpClient()
@@ -195,7 +258,9 @@ if __name__ == "__main__":
                     )
 
             # Wait for the specified interval before checking again
-            logger.info(f"Waiting for {CHECK_INTERVAL} seconds before the next pull check...")
+            logger.info(
+                f"Waiting for {CHECK_INTERVAL} seconds before the next pull check..."
+            )
             time.sleep(CHECK_INTERVAL)
     except ConnectionRefusedError:
         logger.error("MQTT broker is not ready yet")
