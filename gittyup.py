@@ -10,6 +10,8 @@ import git
 from git.exc import GitCommandError
 import paho.mqtt.client as mqtt
 
+CLONE_DIR = "repo"
+CHECK_INTERVAL = 60
 
 class GittyUpClient():
     """ GittyUp client 
@@ -99,35 +101,6 @@ def read_repo_url_from_toml(config_file: str) -> str:
         raise ValueError("Repository URL not found in the TOML file.")
 
 
-def wait_for_updates(url, clone_dir="repo", check_interval=60):
-    """
-    Continuously tries pulling new changes from the remote repository and returns if there are new
-    changes (i.e. if a pull results in a current HEAD being changed).
-
-    This function should be called in a loop: every time it returns it means there are new changes
-    so we should do something.
-
-    Parameters:
-
-    - repo_url: The URL of the remote Git repository.
-    - clone_dir: The directory where the repository should be cloned or pulled.
-    - check_interval: Time in seconds between pull checks.
-    """
-    while True:
-        if clone_or_pull_repo(url, clone_dir):
-            profile = Path(clone_dir) / "profile.json"
-            if profile.exists():
-                payload = json.loads(profile.read_text(encoding="utf-8"))
-                # TODO: Publish local tedge command
-                _ = payload
-
-            return
-
-        # Wait for the specified interval before checking again
-        print(f"Waiting for {check_interval} seconds before the next pull check...")
-        time.sleep(check_interval)
-
-
 def clone_or_pull_repo(repo_url, clone_dir="repo") -> bool:
     """
     Pulls the new information from the remote repository to the local repository, if there is any.
@@ -184,8 +157,18 @@ if __name__ == "__main__":
         # Wait for connection
         time.sleep(1)
 
-        # Note: wait for update is a forever loop
-        wait_for_updates(repo_url)
+        # regularly poll remote repository until there are new commits to pull
+        while True:
+            if clone_or_pull_repo(repo_url, CLONE_DIR):
+                profile = Path(CLONE_DIR) / "profile.json"
+                if profile.exists():
+                    payload = json.loads(profile.read_text(encoding="utf-8"))
+                    # TODO: Publish local tedge command
+                    _ = payload
+
+            # Wait for the specified interval before checking again
+            print(f"Waiting for {CHECK_INTERVAL} seconds before the next pull check...")
+            time.sleep(CHECK_INTERVAL)
     except ConnectionRefusedError:
             print("MQTT broker is not ready yet")
     except KeyboardInterrupt:
