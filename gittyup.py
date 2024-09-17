@@ -99,7 +99,7 @@ def read_repo_url_from_toml(config_file: str) -> str:
         raise ValueError("Repository URL not found in the TOML file.")
 
 
-def wait_for_updates(url, clone_dir="repo", check_interval=60):
+def wait_for_updates(url, clone_dir="repo", check_interval=15):
     """
     Continuously tries pulling new changes from the remote repository and returns if there are new
     changes (i.e. if a pull results in a current HEAD being changed).
