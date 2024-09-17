@@ -32,6 +32,31 @@ def get_device_type():
     )
 
 
+def get_topic_root_prefix() -> str:
+    return (
+        subprocess.check_output(["tedge", "config", "get", "mqtt.topic_root"])
+        .decode("utf-8")
+        .strip()
+        + "/"
+        + subprocess.check_output(["tedge", "config", "get", "mqtt.device_topic_id"])
+        .decode("utf-8")
+        .strip()
+    )
+
+
+def get_mqtt_info() -> tuple[str, int]:
+    return (
+        subprocess.check_output(["tedge", "config", "get", "mqtt.client.host"])
+        .decode("utf-8")
+        .strip(),
+        int(
+            subprocess.check_output(["tedge", "config", "get", "mqtt.client.port"])
+            .decode("utf-8")
+            .strip()
+        ),
+    )
+
+
 class GittyUpClient:
     """GittyUp client
 
@@ -40,8 +65,8 @@ class GittyUpClient:
 
     def __init__(self):
         self.client = None
-        self.device_id = "main"
-        self.root = "te/device/main//"
+        self.device_id = get_device_type()
+        self.root = get_topic_root_prefix()
         self.sub_topic = f"{self.root}/cmd/device_profile/+"
 
     def connect(self):
@@ -61,7 +86,9 @@ class GittyUpClient:
         client.on_message = self.on_message
         client.on_subscribe = self.on_subscribe
 
-        logger.debug(f"Trying to connect to the MQTT broker: host=localhost:1883")
+        (host, port) = get_mqtt_info()
+
+        logger.debug(f"Trying to connect to the MQTT broker: host={host}:{port}")
 
         client.will_set(
             "te/device/main/service/gittyup/status/health",
@@ -70,7 +97,7 @@ class GittyUpClient:
             retain=True,
         )
 
-        client.connect("localhost", 1883)
+        client.connect(host, port)
         client.loop_start()
 
         self.client = client
@@ -256,6 +283,7 @@ if __name__ == "__main__":
     logger.addHandler(handler)
 
     client = GittyUpClient()
+
     try:
         client.connect()
         # Wait for connection
