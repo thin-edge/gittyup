@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
+import json
 import os
 import time
 import tomllib
+from pathlib import Path
 import git
 from git.exc import GitCommandError
 
@@ -35,6 +37,12 @@ def wait_for_updates(url, clone_dir="repo", check_interval=60):
     """
     while True:
         if clone_or_pull_repo(url, clone_dir):
+            profile = Path(clone_dir) / "profile.json"
+            if profile.exists():
+                payload = json.loads(profile.read_text(encoding="utf-8"))
+                # TODO: Publish local tedge command
+                _ = payload
+
             return
 
         # Wait for the specified interval before checking again
