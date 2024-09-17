@@ -2,7 +2,7 @@
 
 import os
 import time
-import toml
+import tomllib
 import git
 from git.exc import GitCommandError
 
@@ -10,7 +10,8 @@ from git.exc import GitCommandError
 def read_repo_url_from_toml(config_file: str) -> str:
     """Reads the repository URL from a TOML configuration file."""
     # TODO: properly serialise the config
-    config_data = toml.load(config_file)
+    file = open(config_file, "rb")
+    config_data = tomllib.load(file)
     url = config_data.get("repository", {}).get("url")
     if url:
         return url
@@ -37,8 +38,7 @@ def wait_for_updates(url, clone_dir="repo", check_interval=60):
             return
 
         # Wait for the specified interval before checking again
-        print(f"Waiting for {
-              check_interval} seconds before the next pull check...")
+        print(f"Waiting for {check_interval} seconds before the next pull check...")
         time.sleep(check_interval)
 
 
@@ -90,7 +90,7 @@ def clone_or_pull_repo(repo_url, clone_dir="repo") -> bool:
         return True
 
 
-if __name__ == '__main__':
-    repo_url = read_repo_url_from_toml('config.toml')
+if __name__ == "__main__":
+    repo_url = read_repo_url_from_toml("config.toml")
     # clone_or_pull_repo(repo_url)
     wait_for_updates(repo_url)
