@@ -16,6 +16,7 @@ scripts:
 
 depends:
   - python3-git
+  - python3-paho-mqtt
 
 apk:
   # Use noarch instead of "all"

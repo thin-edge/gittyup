@@ -20,7 +20,7 @@ class GittyUpClient():
             return
         
         # Don't use a clean session so no messages will go missing
-        client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2, client_id=self.device_id, clean_session=False)
+        client = mqtt.Client(client_id=self.device_id, clean_session=False)
         client.reconnect_delay_set(10, 120)
 
         client.on_connect = self.on_connect
@@ -55,14 +55,14 @@ class GittyUpClient():
 
         self.client.publish(topic=topic, payload=payload, retain=True, qos=1)
 
-    def on_connect(self, client, userdata, flags, reason_code, properties):
+    def on_connect(self, client, userdata, flags, reason_code):
             if reason_code.is_failure:
                 print(f"Failed to connect. result_code={reason_code}. Retrying the connection")
             else:
                 print(f"Connected to MQTT broker! result_code={reason_code}")
                 self.subscribe()
 
-    def on_disconnect(self, client, userdata, mid, reason_code, properties):
+    def on_disconnect(self, client, userdata, mid, reason_code):
         print(f"Client was disconnected: result_code={reason_code}")
 
     def on_message(self, client, userdata, message):
@@ -71,9 +71,11 @@ class GittyUpClient():
         if payload_dict['status'] == "successful":
             self.publish_tedge_command(message.topic, '')
             
-    def on_subscribe(self, client, userdata, mid, reason_code_list, properties):
-        if reason_code_list[0].is_failure:
-            print(f"Could not subscribe to {self.sub_topic}. result_code={reason_code_list[0]}")
+    def on_subscribe(self, client, userdata, mid, granted_qos):
+        for sub_result in granted_qos:
+            if sub_result == 0x80:
+                # error processing
+                print(f"Could not subscribe to {self.sub_topic}. result_code={granted_qos}")
 
 if __name__ == '__main__':
     client = GittyUpClient()
