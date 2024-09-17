@@ -3,6 +3,7 @@
 import json
 import os
 import time
+import logging
 import tomllib
 import sys
 from pathlib import Path
@@ -13,7 +14,6 @@ import paho.mqtt.client as mqtt
 
 CLONE_DIR = "repo"
 CHECK_INTERVAL = 15
-
 
 class GittyUpClient:
     """GittyUp client
@@ -30,7 +30,7 @@ class GittyUpClient:
     def connect(self):
         """Connect to the thin-edge.io MQTT broker"""
         if self.client is not None:
-            print(f"MQTT client already exists. connected={self.client.is_connected()}")
+            logger.info(f"MQTT client already exists. connected={self.client.is_connected()}")
             return
 
         # Don't use a clean session so no messages will go missing
@@ -42,7 +42,7 @@ class GittyUpClient:
         client.on_message = self.on_message
         client.on_subscribe = self.on_subscribe
 
-        print(f"Trying to connect to the MQTT broker: host=localhost:1883")
+        logger.debug(f"Trying to connect to the MQTT broker: host=localhost:1883")
 
         client.will_set(
             "te/device/main/service/gittyup/status/health",
@@ -65,7 +65,7 @@ class GittyUpClient:
     def subscribe(self):
         """Subscribe to thin-edge.io device profile topic."""
         self.client.subscribe(self.sub_topic)
-        print(f"subscribed to topic {self.sub_topic}")
+        logger.debug(f"subscribed to topic {self.sub_topic}")
 
     def loop_forever(self):
         """Block infinitely"""
@@ -78,11 +78,11 @@ class GittyUpClient:
 
     def on_connect(self, client, userdata, flags, reason_code):
         if reason_code != 0:
-            print(
+            logger.error(
                 f"Failed to connect. result_code={reason_code}. Retrying the connection"
             )
         else:
-            print(f"Connected to MQTT broker! result_code={reason_code}")
+            logger.info(f"Connected to MQTT broker! result_code={reason_code}")
             client.publish(
                 "te/device/main/service/gittyup/status/health",
                 json.dumps({"status": "up"}),
@@ -92,7 +92,7 @@ class GittyUpClient:
             self.subscribe()
 
     def on_disconnect(self, client, userdata, reason_code):
-        print(f"Client was disconnected: result_code={reason_code}")
+        logger.info(f"Client was disconnected: result_code={reason_code}")
 
     def on_message(self, client, userdata, message):
         payload_dict = json.loads(message.payload)
@@ -104,7 +104,7 @@ class GittyUpClient:
         for sub_result in granted_qos:
             if sub_result == 0x80:
                 # error processing
-                print(
+                logger.error(
                     f"Could not subscribe to {self.sub_topic}. result_code={granted_qos}"
                 )
 
@@ -138,7 +138,7 @@ def clone_or_pull_repo(repo_url, clone_dir="repo") -> Optional[str]:
     """
     if os.path.exists(clone_dir):
         # If the repository exists, try to pull the latest changes
-        print(f"Pulling the latest changes in '{clone_dir}'...")
+        logger.debug(f"Pulling the latest changes in '{clone_dir}'...")
 
         repo = git.Repo(clone_dir)
         origin = repo.remotes.origin
@@ -148,29 +148,31 @@ def clone_or_pull_repo(repo_url, clone_dir="repo") -> Optional[str]:
             fetch_info = origin.pull()[0]
 
         except GitCommandError as e:
-            print(f"Error during git pull: {e}")
+            logger.error(f"Error during git pull: {e}")
 
         if fetch_info.commit.hexsha != prev_commit.hexsha:
-            print("Repository updated with new changes.")
+            logger.info("Repository updated with new changes.")
             return fetch_info.commit.hexsha
 
-        print("No new changes found. Repository is already up to date.")
+        logger.info("No new changes found. Repository is already up to date.")
         return None
     else:
         # If the repository doesn't exist, clone it
-        print(f"Cloning the repository '{repo_url}' into '{clone_dir}'...")
+        logger.debug(f"Cloning the repository '{repo_url}' into '{clone_dir}'...")
 
         try:
             repo = git.Repo.clone_from(repo_url, clone_dir)
         except GitCommandError as e:
-            print(f"Error during git clone: {e}")
+            logger.error(f"Error during git clone: {e}")
 
-        print(f"Repository cloned into '{clone_dir}'.")
+        logger.info(f"Repository cloned into '{clone_dir}'.")
 
         return repo.head.commit.hexsha
 
 
 if __name__ == "__main__":
+    logger = logging.getLogger(__name__)
+
     repo_url = read_repo_url_from_toml("config.toml")
     client = GittyUpClient()
     try:
@@ -193,14 +195,14 @@ if __name__ == "__main__":
                     )
 
             # Wait for the specified interval before checking again
-            print(f"Waiting for {CHECK_INTERVAL} seconds before the next pull check...")
+            logger.info(f"Waiting for {CHECK_INTERVAL} seconds before the next pull check...")
             time.sleep(CHECK_INTERVAL)
     except ConnectionRefusedError:
-        print("MQTT broker is not ready yet")
+        logger.error("MQTT broker is not ready yet")
     except KeyboardInterrupt:
-        print("Exiting...")
+        logger.info("Exiting...")
         if client:
             client.shutdown()
         sys.exit(0)
     except Exception as ex:
-        print("Unexpected error. %s", ex)
+        logger.error("Unexpected error. %s", ex)
