@@ -97,10 +97,9 @@ class GittyUpClient:
             retain=True,
         )
 
-        client.connect(host, port)
-        client.loop_start()
-
         self.client = client
+        self.client.connect(host, port)
+        self.client.loop_start()
 
     def shutdown(self):
         """Shutdown client including any workers in progress"""
@@ -115,9 +114,9 @@ class GittyUpClient:
             self.client.disconnect()
             self.client.loop_stop()
 
-    def subscribe(self):
+    def subscribe(self, client):
         """Subscribe to thin-edge.io device profile topic."""
-        self.client.subscribe(self.sub_topic)
+        client.subscribe(self.sub_topic)
         logger.debug(f"subscribed to topic {self.sub_topic}")
 
     def loop_forever(self):
@@ -142,7 +141,7 @@ class GittyUpClient:
                 retain=True,
                 qos=1,
             )
-            self.subscribe()
+            self.subscribe(client)
 
     def on_disconnect(self, client, userdata, reason_code):
         logger.info(f"Client was disconnected: result_code={reason_code}")
@@ -221,7 +220,9 @@ def read_repo_url_from_toml(config_file: str) -> GitOpsRepository:
         raise ValueError("Repository URL or branch not found in the TOML file.")
 
 
-def clone_or_pull_repo(repo_config: GitOpsRepository, clone_dir="repo") -> Optional[str]:
+def clone_or_pull_repo(
+    repo_config: GitOpsRepository, clone_dir="repo"
+) -> Optional[str]:
     """
     Pulls the new information from the remote repository to the local repository, if there is any.
     If local repository does not exist, it is cloned.
@@ -258,7 +259,9 @@ def clone_or_pull_repo(repo_config: GitOpsRepository, clone_dir="repo") -> Optio
         return None
     else:
         # If the repository doesn't exist, clone it
-        logger.debug(f"Cloning the repository '{repo_config.url}' into '{clone_dir}'...")
+        logger.debug(
+            f"Cloning the repository '{repo_config.url}' into '{clone_dir}'..."
+        )
         logger.debug("Using branch '%s'", repo_config.branch)
 
         try:
@@ -270,7 +273,9 @@ def clone_or_pull_repo(repo_config: GitOpsRepository, clone_dir="repo") -> Optio
         g.checkout(repo_config.branch)
 
         repo = git.Repo(clone_dir)
-        assert repo.active_branch.name == repo_config.branch, f"${repo.active_branch} != ${repo_config.branch}"
+        assert (
+            repo.active_branch.name == repo_config.branch
+        ), f"${repo.active_branch} != ${repo_config.branch}"
 
         logger.info(f"Repository cloned into '{clone_dir}'.")
 
@@ -305,9 +310,17 @@ if __name__ == "__main__":
                 profile = Path(CLONE_DIR) / "profile.json"
                 if profile.exists():
                     payload = json.loads(profile.read_text(encoding="utf-8"))
-                    payload["commit"] = commit[0] if isinstance(commit, (tuple, list)) else commit
-                    payload["branch"] = repo.branch[0] if isinstance(repo.branch, (tuple, list)) else repo.branch
-                    payload["url"] = repo.url[0] if isinstance(repo.url, (tuple, list)) else repo.url
+                    payload["commit"] = (
+                        commit[0] if isinstance(commit, (tuple, list)) else commit
+                    )
+                    payload["branch"] = (
+                        repo.branch[0]
+                        if isinstance(repo.branch, (tuple, list))
+                        else repo.branch
+                    )
+                    payload["url"] = (
+                        repo.url[0] if isinstance(repo.url, (tuple, list)) else repo.url
+                    )
 
                     cmd_id = f"gittyup-{int(time.time())}"
                     client.publish_tedge_command(
