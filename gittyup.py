@@ -67,6 +67,7 @@ class GittyUpClient:
         self.client = None
         self.device_id = get_device_type()
         self.root = get_topic_root_prefix()
+        self.service_root = "/".join(self.root.split("/")[0:3] + ["service", "gittyup"])
         self.sub_topic = f"{self.root}/cmd/device_profile/+"
 
     def connect(self):
@@ -91,7 +92,7 @@ class GittyUpClient:
         logger.debug(f"Trying to connect to the MQTT broker: host={host}:{port}")
 
         client.will_set(
-            "te/device/main/service/gittyup/status/health",
+            f"{self.self.service_root}/status/health",
             json.dumps({"status": "down"}),
             qos=1,
             retain=True,
@@ -105,7 +106,7 @@ class GittyUpClient:
         """Shutdown client including any workers in progress"""
         if self.client and self.client.is_connected():
             self.client.publish(
-                "te/device/main/service/gittyup/status/health",
+                f"{self.self.service_root}/status/health",
                 json.dumps({"status": "down"}),
                 qos=1,
                 retain=True,
@@ -136,7 +137,7 @@ class GittyUpClient:
         else:
             logger.info(f"Connected to MQTT broker! result_code={reason_code}")
             client.publish(
-                "te/device/main/service/gittyup/status/health",
+                f"{self.service_root}/status/health",
                 json.dumps({"status": "up"}),
                 retain=True,
                 qos=1,
